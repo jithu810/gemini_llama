@@ -1,0 +1,5 @@
+python -m grpc_tools.protoc -I./proto --python_out=./generated --grpc_python_out=./generated ./proto/generic_service.proto
+python -m streamlit run chat_client.py
+pytest -p no:warnings
+transformers support for both models  transformers==4.44.2
+pip install python-magic-bin
