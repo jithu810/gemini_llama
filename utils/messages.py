@@ -62,3 +62,14 @@ class SuccessMessages:
     AMOUNT_EXTRACTED = "Extracted value: {value}"
     AMOUNT_COMPARISON = "Extracted: {extracted}, Match: {match}"
     DIR_CLEARED_AND_REMOVED="Deleted the processed folder"
+
+
+class ShortMessages:
+    INVOKED="[CALLED]"
+    PARAMS="[PARAMETERS]"
+    VALIDATION_ERROR="[VALIDATION ERROR]"
+    IMAGE_EXTRACTION_ERROR="[PROCESS IMAGE_EXTRACTION_ERROR]"
+    MRZ_ERROR="[PROCESS MRZ_ERROR]"
+    AI_ERROR="[AI ERROR]"
+    MODAL_PARAMS="[MODAL_PARAMS]"
+    MODAL_ERROR="[MODAL_ERROR]"

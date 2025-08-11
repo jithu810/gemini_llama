@@ -37,6 +37,7 @@ class Config:
     ENVIRONMENT = C.ENVIRONMENT
     PORT = C.PORT
     API_URL_MINICPM_BASE=C.API_URL_MINICPM_BASE
+    MODEL_VERSION=C.MODEL_VERSION
 
     # Project paths
     PROJECT_ROOT = Path(__file__).resolve().parent.parent

@@ -6,6 +6,7 @@ import threading
 import requests
 import os
 import json
+from core.llama.loaders import load_model_o_2_6,load_model_V_4_0,llama_1b
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
@@ -15,45 +16,39 @@ llama_logger = loggers['llama_model']
 USE_SERVER = Config.USE_SERVER
 API_URL_LLAMA = Config.API_URL_LLAMA
 HEADER_TOKEN = Config.HEADER_TOKEN
+MODEL_VERSION = Config.MODEL_VERSION
 
 class LlamaSummarizer:
     _instance = None
+    version = MODEL_VERSION
 
-    def __new__(cls, model_id=r"Weights\LLAMA3\llama-3.2-3B-Instruct"):
+    def __new__(cls):
         if cls._instance is None:
             cls._instance = super(LlamaSummarizer, cls).__new__(cls)
-            cls._instance.model_id = model_id
+            cls._instance.model_name = MODEL_VERSION
             cls._instance.use_server = USE_SERVER
-            cls._instance.HF_TOKEN = HEADER_TOKEN
-            cls._instance.api_url=API_URL_LLAMA
-            try:
-                if not USE_SERVER:
-                    llama_logger.info(f"Loading tokenizer and model: {model_id}")
-                    cls._instance.tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-                    cls._instance.model = AutoModelForCausalLM.from_pretrained(
-                        model_id,
-                        trust_remote_code=True,
-                        torch_dtype=torch.bfloat16,
-                        device_map="auto"
-                    )
-                    cls._instance.streamer = TextStreamer(cls._instance.tokenizer, skip_prompt=True)
-                    cls._instance.pipe = pipeline(
-                        "text-generation",
-                        model=cls._instance.model,
-                        tokenizer=cls._instance.tokenizer,
-                        torch_dtype=torch.bfloat16,
-                        device_map="auto",
-                        streamer=cls._instance.streamer
-                    )
-                    llama_logger.info(f"LLaMA model loaded successfully: {model_id}")
-                else:
-                    llama_logger.info("Using Hugging Face Inference API endpoint")
-            except Exception as e:
-                llama_logger.error(f"Failed to load LLaMA model: {e}")
-                raise
+            cls._instance.query_id = None
+            cls._instance.version = MODEL_VERSION.lower()
+            if cls._instance.use_server:
+                llama_logger.info("Using Hugging Face Inference API endpoint")
+            else:
+                cls._instance.model, cls._instance.tokenizer = cls._instance.load_model_and_tokenizer()
+                llama_logger.info(f"MiniCPMModel initialized with model: {cls._instance.model_name}")
             cls._instance.input_token_count = 0
             cls._instance.generated_token_count = 0
         return cls._instance
+        
+    def load_model_and_tokenizer(self):
+        """"""
+        version = self.version
+        if version == "llama1b":
+            return llama_1b()
+        elif version == "o_2_6":
+            return load_model_o_2_6()
+        elif version == "v_4":
+            return load_model_V_4_0()
+        else:
+            raise ValueError(f"Unsupported MiniCPM version: {version}")
 
     def format_messages(self, messages):
         prompt = ""

@@ -17,3 +17,7 @@ def response(status_code,message,error_message):
         "remarks": error_message,
         "data": {}
     }
+
+def log_and_respond(logger, status_code, msg, detail):
+    logger.warning(detail)
+    return response(status_code, msg, detail)

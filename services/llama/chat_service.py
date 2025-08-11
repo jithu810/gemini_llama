@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import os
-# from utils.config import loggers, TEMPERATURE, MAX_NEW_TOKENS
 from utils.config import Config
 from utils.prompts import BASE_RAG_SYSTEM_PROMPT
 from utils.messages import ErrorMessages, SuccessMessages
