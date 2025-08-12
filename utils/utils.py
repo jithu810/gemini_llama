@@ -15,6 +15,7 @@ utils_logger = loggers['utils']
 
 def get_pdf_page_count(file_path):
     try:
+        print(file_path)
         reader = PdfReader(file_path)
         return len(reader.pages), None
     except Exception as e:

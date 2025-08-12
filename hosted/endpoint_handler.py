@@ -4,7 +4,6 @@ from transformers import AutoModel, AutoTokenizer
 from io import BytesIO
 import base64
 from huggingface_hub import login
-from huggingface_hub import login
 import os
 
 class EndpointHandler:

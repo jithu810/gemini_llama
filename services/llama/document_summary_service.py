@@ -1,23 +1,16 @@
 # -*- coding: utf-8 -*-
 from utils.messages import ErrorMessages, SuccessMessages,ShortMessages
 from utils.status_codes import HttpStatusCodes
-from utils.response_utils import response as _response
 from utils.prompts import SUMMARIZE_PROMPT,DEFAULT_SUMMARIZE_PROMPT
 from core.document_extractor import extract_text_from_file
-from utils.llama_load import load_llama_model
 from utils.timer import Timer
 from services.llama.base_processor import BaseDocumentProcessor
-from utils.config import Config
-
-PRODUCTION=Config.ENVIRONMENT
 
 class DocumentSummaryProcessor(BaseDocumentProcessor):
     def __init__(self, params: dict, context):
         super().__init__(params, context)
         self.log = self.logger['document_summary']
-        self.log.info(f"{ShortMessages.INVOKED} DocumentPassportProcessor")
-        self.ROLE_SYSTEM = "system"
-        self.ROLE_USER = "user"
+        self.log.info(f"{ShortMessages.INVOKED} DocumentSummaryProcessor")
         self.queries = self.params.get("Query")
         self.raw_text = self.params.get("RawText")
         
@@ -29,6 +22,7 @@ class DocumentSummaryProcessor(BaseDocumentProcessor):
             validation_response,file_type_or_error = self.validate_input(self.doc_path, self.query_id, self.log)
             if validation_response:
                 return validation_response
+            
             try:
                 input_text = extract_text_from_file(self.doc_path,file_type_or_error)
                 if not input_text or input_text.strip() == "":
@@ -47,13 +41,19 @@ class DocumentSummaryProcessor(BaseDocumentProcessor):
             self.log.info("Calling the LlamaSummarizer for document summarization...")
             summary_accumulator = ""
             with Timer() as total_timer:
-                for result in self.llama_model.stream_summary(max_new_tokens=self.max_new_tokens, temperature=self.temperature, messages=message_list,query_id=self.query_id,use_history=False):
+                for result in self.llama_model.stream_summary(max_new_tokens=self.max_new_tokens, 
+                                                              temperature=self.temperature, 
+                                                              messages=message_list,
+                                                              query_id=self.query_id,
+                                                              use_history=False
+                                                              ):
                     if isinstance(result, dict) and "error" in result:
                         return self.respond(self.log, 
+                                    HttpStatusCodes.INTERNAL_SERVER_ERROR,
                                     ErrorMessages.SUMMARY_FAILED, 
                                     f":{str(result['error'])}")
                     else:
-                        if PRODUCTION !='production':
+                        if self.production !='production':
                             print(result,end="",flush=True)
                             # self.log.info(f"Streamed chunk: {result.strip()}")
                         summary_accumulator += result
@@ -73,4 +73,5 @@ class DocumentSummaryProcessor(BaseDocumentProcessor):
         except Exception as e:
            return self.respond(self.log, 
                                 HttpStatusCodes.INTERNAL_SERVER_ERROR, 
+                                ErrorMessages.INTERNAL_SERVER_ERROR,
                                 f":{str(e)}")

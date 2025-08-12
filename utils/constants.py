@@ -10,6 +10,6 @@ QUANTIZED = True
 TEMPERATURE = 0.3
 MAX_NEW_TOKENS = 128
 ENVIRONMENT = "test"
-MODEL_VERSION="llama1b"
+MODEL_VERSION="llama_3b"
 PORT=50051
 API_URL_MINICPM_BASE="https://sreejith8100-llm-fastapi.hf.space/predict"

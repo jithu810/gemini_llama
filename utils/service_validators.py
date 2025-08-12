@@ -6,7 +6,7 @@ from utils.messages import ErrorMessages
 loggers= Config.init_logging()
 utils_logger = loggers['utils']
 
-def validate_pdf_file(pdf_path):
+def validate_doc(pdf_path):
     """
     Validates a document file using DocumentValidator.
 

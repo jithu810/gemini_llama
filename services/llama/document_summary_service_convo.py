@@ -1,103 +1,46 @@
 # -*- coding: utf-8 -*-
 import os
-
-from utils.service_validators import validate_pdf_file
-from utils.messages import ErrorMessages, SuccessMessages
+from utils.messages import ErrorMessages, SuccessMessages,ShortMessages
 from utils.status_codes import HttpStatusCodes
 from utils.timer import Timer
-from utils.response_utils import response as _response
 from utils.prompts import SUMMARIZE_PROMPT,DEFAULT_SUMMARIZE_PROMPT
-
 from core.document_extractor import extract_text_from_file
-from utils.llama_load import load_llama_model
-from interceptors.request_id_interceptor import request_id_ctx
-from utils.value_check import safe_int,safe_float
+from services.llama.base_processor import BaseDocumentProcessor
 
-from utils.config import Config
-loggers = Config.init_logging()
-
-output_dir = Config.OUTPUT_DIR
-TEMPERATURE=Config.TEMPERATURE
-MAX_NEW_TOKENS=Config.MAX_NEW_TOKENS
-
-service_logger = loggers['document_summary']
-
-class DocumentSummaryConvoProcessor:
+class DocumentSummaryConvoProcessor(BaseDocumentProcessor):
     def __init__(self, params: dict, context):
-        """
-        Initializes the DocumentSummaryConvoProcessor with parameters and context.
-        :param params: Dictionary containing parameters for processing.
-        :param context: Context for the service call.
-        """
-        service_logger.info("[INIT] DocumentSummaryConvoProcessor initialized with parameters.")
-        self.params = params
-        self.context = context
-        self.ROLE_SYSTEM = "system"
-        self.ROLE_USER = "user"
+        super().__init__(params, context)
 
-        self.doc_path = self.params.get("FilePath")
+        self.log = self.logger['document_summary']
+        self.log.info(f"{ShortMessages.INVOKED} DocumentSummaryConvoProcessor")
         self.queries = self.params.get("Query")
-        self.query_id = self.params.get("QueryId")
         self.raw_text = self.params.get("RawText")
         
-        self.temperature = safe_float(self.params.get("temperature", TEMPERATURE), TEMPERATURE)
-        self.max_new_tokens = safe_int(self.params.get("max_new_tokens", MAX_NEW_TOKENS), MAX_NEW_TOKENS)
-
-        if not self.query_id:   
-            service_logger.warning(f"[INIT] Missing QueryId parameter.")
-        request_id_ctx.set(self.query_id)
-        
-        self.model,error=load_llama_model()
-        if error:
-            message= ErrorMessages.MODEL_LOAD_FAILED
-            service_logger.error(f"[INIT MODEL FAILED] {message} {error}")
-            raise RuntimeError(f"{message}: {error}")
-
     def process(self):
-        """
-        Processes a document for summarization using either provided raw text or by extracting text from a PDF file.
-        Handles input validation, error management, and streams the summary result using a language model.
-        Workflow:  
-        - Logs the start of the process with relevant parameters.
-        - Uses `raw_text` for summarization if provided; otherwise, attempts to extract text from the specified PDF file.
-        - Validates the PDF file and handles extraction errors.
-        - Constructs a message list for the summarization model, including system and user prompts.
-        - Streams the summary result from the model, accumulating the output.
-        - Logs and returns the summary along with metadata such as query ID and processing time.
-        - Handles and logs exceptions, returning appropriate error responses.
-        Returns:
-            dict: A response dictionary containing status code, description, remarks, and the summary data or error details.
-        """
+        
         try:
-            service_logger.info(f"[START] QueryId={self.query_id}, FilePath={self.doc_path}, Temperature={self.temperature},"
+            self.log.info(f"{ShortMessages.PARAMS} QueryId={self.query_id}, FilePath={self.doc_path}, Temperature={self.temperature},"
                                 f"MaxTokens={self.max_new_tokens},RawText={self.raw_text}")
             
             if self.raw_text and self.raw_text.strip():
                 input_text = self.raw_text.strip()
-                service_logger.info("Using provided raw_text for summarization.")
-            else:       
-                if not self.doc_path:
-                    message = ErrorMessages.MISSING_PARMS
-                    error_message = f"{message} PDF path not provided."
-                    service_logger.warning(f"[INIT]{error_message}")
-                    return _response(HttpStatusCodes.BAD_REQUEST, message, error_message)
+                self.log.info("Using provided raw_text for summarization.")
+            else:    
 
-                is_valid, file_type_or_error = validate_pdf_file(self.doc_path)
-                if not is_valid:
-                    message= ErrorMessages.ERROR_VAL_DOC
-                    error_message = f"[NOT VALID]{message} {file_type_or_error}"
-                    service_logger.warning(error_message)
-                    return _response(HttpStatusCodes.BAD_REQUEST,message,error_message)
+                # Common validations
+                validation_response,file_type_or_error = self.validate_input(self.doc_path, self.query_id, self.log)
+                if validation_response:
+                    return validation_response
+                
                 try:
                     input_text = extract_text_from_file(self.doc_path,file_type_or_error)
                     if not input_text or input_text.strip() == "":
                         raise ValueError("Extracted text is empty.")
                 except Exception as e:
-                    message = ErrorMessages.AI_EXTRACTION_FAILED
-                    error_message= f"{message} {str(e)}"
-                    service_logger.error(error_message)
-                    return _response(HttpStatusCodes.INTERNAL_SERVER_ERROR,message,error_message)
-                
+                    return self.respond(self.log,
+                                            HttpStatusCodes.BAD_REQUEST,
+                                            ErrorMessages.AI_EXTRACTION_FAILED,
+                                            f"{e} text extraction failed")
             # Determine user message
             user_message = self.queries[0] if isinstance(self.queries, list) and self.queries else DEFAULT_SUMMARIZE_PROMPT
             message_list = [
@@ -105,20 +48,19 @@ class DocumentSummaryConvoProcessor:
                 {"role": self.ROLE_USER, "content": user_message}
             ]
 
-            service_logger.info("Calling the LlamaSummarizer for document summarization...")
+            self.log.info("Calling the LlamaSummarizer for document summarization...")
             summary_accumulator = ""
 
             with Timer() as total_timer:
-                for result in self.model.stream_summary(max_new_tokens=self.max_new_tokens, temperature=self.temperature, messages=message_list,query_id=self.query_id,use_history=True):
+                for result in self.llama_model.stream_summary(max_new_tokens=self.max_new_tokens, temperature=self.temperature, messages=message_list,query_id=self.query_id,use_history=True):
                     if isinstance(result, dict) and "error" in result:
-                        message = ErrorMessages.SUMMARY_FAILED
-                        error_message= f"{message} {result['error']}"
-                        service_logger.error(error_message)
-                        return _response(HttpStatusCodes.INTERNAL_SERVER_ERROR,message,error_message)
+                        return self.respond(self.log, 
+                                    ErrorMessages.SUMMARY_FAILED, 
+                                    f":{str(result['error'])}")
                     else:
-                        if os.getenv('ENVIRONMENT') != 'production':
+                        if self.production !='production':
                             print(result,end="",flush=True)
-                            # service_logger.info(f"Streamed chunk: {result.strip()}")
+                            # self.log.info(f"Streamed chunk: {result.strip()}")
                         summary_accumulator += result
             result = {
                 "QueryId": self.query_id,
@@ -126,7 +68,7 @@ class DocumentSummaryConvoProcessor:
                 "Data": summary_accumulator
 
             }
-            service_logger.info(f"[DATA SENT]{result}")
+            self.log.info(f"[DATA SENT]{result}")
             return {
                 "status_code": HttpStatusCodes.OK,
                 "status_description": "OK",
@@ -135,7 +77,7 @@ class DocumentSummaryConvoProcessor:
             }
 
         except Exception as e:
-            message= ErrorMessages.INTERNAL_SERVER_ERROR
-            error_message= f"[INTERNAL SERVER ERROR]{message}: {str(e)}"
-            service_logger.error(error_message)
-            return _response(HttpStatusCodes.INTERNAL_SERVER_ERROR,message,error_message)
+            return self.respond(self.log, 
+                                HttpStatusCodes.INTERNAL_SERVER_ERROR, 
+                                ErrorMessages.INTERNAL_SERVER_ERROR,
+                                f":{str(e)}")

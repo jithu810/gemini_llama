@@ -1,7 +1,7 @@
 
 from datetime import datetime
 
-from utils.service_validators import validate_pdf_file
+from utils.service_validators import validate_doc
 from utils.messages import ErrorMessages, SuccessMessages
 from utils.status_codes import HttpStatusCodes
 from utils.response_utils import response as _response
@@ -99,7 +99,7 @@ class ChromaInsertProcessor:
                 error_message = f"{messages} Embedding function not initialized."
                 service_logger.error(error_message)
                 return _response(HttpStatusCodes.INTERNAL_SERVER_ERROR, messages, error_message)
-            is_valid, file_type_or_error = validate_pdf_file(self.doc_path)
+            is_valid, file_type_or_error = validate_doc(self.doc_path)
             if not is_valid:
                 messages= ErrorMessages.ERROR_VAL_DOC
                 error_message= f"{messages}: {file_type_or_error}"

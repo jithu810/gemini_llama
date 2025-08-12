@@ -1,12 +1,12 @@
-import torch
-from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline,TextStreamer
 from utils.config import Config
 from transformers import TextIteratorStreamer
 import threading
 import requests
 import os
 import json
-from core.llama.loaders import load_model_o_2_6,load_model_V_4_0,llama_1b
+from core.llama.loaders import llama_3b,load_model_V_4_0,llama_1b
+from core.llama.history import ChatHistoryManager
+chat_history=ChatHistoryManager()
 
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
 
@@ -41,10 +41,10 @@ class LlamaSummarizer:
     def load_model_and_tokenizer(self):
         """"""
         version = self.version
-        if version == "llama1b":
+        if version == "llama_1b":
             return llama_1b()
-        elif version == "o_2_6":
-            return load_model_o_2_6()
+        elif version == "llama_3b":
+            return llama_3b()
         elif version == "v_4":
             return load_model_V_4_0()
         else:
@@ -69,34 +69,7 @@ class LlamaSummarizer:
             "generated_tokens": self.generated_token_count,
             "total_tokens": self.input_token_count + self.generated_token_count
         }
-    
-    def load_history(self, query_id):
-        path = f"./history/{query_id}.json"
-        if os.path.exists(path):
-            try:
-                with open(path, "r") as f:
-                    data = json.load(f)
-                    llama_logger.info(f"[HISTORY] Loaded {len(data)} messages from history.")
-                    return data, None
-            except Exception as e:
-                llama_logger.error(f"[HISTORY LOAD ERROR] {e}")
-                return [], f"Failed to load history: {str(e)}"
-        else:
-            llama_logger.info("[HISTORY] No existing history found.")
-            return [], None
-
-    def save_history(self, query_id, messages):
-        path = f"./history/{query_id}.json"
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        try:
-            with open(path, "w") as f:
-                json.dump(messages, f, indent=2)
-            llama_logger.info(f"[HISTORY] Saved {len(messages)} messages to history.")
-            return True, None
-        except Exception as e:
-            llama_logger.error(f"[HISTORY SAVE ERROR] {e}")
-            return False, str(e)
-    
+   
     def summarize_via_hf_api(self, messages, temperature=0.7, max_new_tokens=512):
         prompt = self.format_messages(messages)
         headers = {
@@ -136,7 +109,7 @@ class LlamaSummarizer:
 
         if query_id:
             self.query_id = query_id
-            history, _ = self.load_history(query_id) if use_history else ([], None)
+            history, _ = chat_history.load_history(query_id) if use_history else ([], None)
             msgs = history + messages
         else:
             msgs = messages
@@ -184,7 +157,7 @@ class LlamaSummarizer:
                 # Append bot reply to history
                 llama_logger.info(f"Appending bot reply to history.{generated_text}")
                 msgs.append({"role": "assistant", "content": generated_text})
-                self.save_history(query_id, msgs)
+                chat_history.save_history(query_id, msgs)
 
         except Exception as e:
             llama_logger.error(f"Streaming summarization failed: {e}")

@@ -3,13 +3,15 @@ from utils.config import Config
 from utils.value_check import safe_int, safe_float
 from utils.response_utils import log_and_respond
 from utils.utils import cleanup_folder
-from validators.validation_helpers import validate_pdf_input
+from validators.validation_helpers import validate_doc_input
 from core.llama_model import LlamaSummarizer
 
 loggers = Config.init_logging()
 
 TEMPERATURE = Config.TEMPERATURE
 MAX_NEW_TOKENS = Config.MAX_NEW_TOKENS
+PRODUCTION=Config.ENVIRONMENT
+
 
 class BaseDocumentProcessor:
     def __init__(self, params: dict, context):
@@ -21,6 +23,7 @@ class BaseDocumentProcessor:
             self.doc_path: str = params.get("FilePath")
             self.query_id: str = params.get("QueryId")
 
+            self.production=PRODUCTION
             self.temperature: str = safe_float(params.get("temperature", TEMPERATURE), TEMPERATURE)
             self.max_new_tokens: str = safe_int(params.get("max_new_tokens", MAX_NEW_TOKENS), MAX_NEW_TOKENS)
 
@@ -28,7 +31,11 @@ class BaseDocumentProcessor:
 
             self.respond = log_and_respond
             self.clean = cleanup_folder
-            self.validate_input = validate_pdf_input
+            self.validate_input = validate_doc_input
+
+            self.ROLE_SYSTEM = "system"
+            self.ROLE_USER = "user"
+            self.ROLE_ASSISTANT = "assistant"
 
         except Exception as e:
             module = self.context.get("module", "default")

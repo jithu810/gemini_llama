@@ -7,7 +7,7 @@ from utils.response_utils import response as _response
 from interceptors.request_id_interceptor import request_id_ctx
 from utils.value_check import safe_int,safe_float
 from utils.config import Config
-from utils.service_validators import validate_pdf_file
+from utils.service_validators import validate_doc
 from sentence_transformers import SentenceTransformer,util
 import pandas as pd
 import os
